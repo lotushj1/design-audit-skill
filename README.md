@@ -76,14 +76,13 @@
 
 需要支援視覺輸入(圖片)的 Claude 模型與環境,例如 Claude Code、Claude.ai 或 Claude API。
 
-QR Code 檢查需要可執行 Python 的環境(例如 Claude Code),並安裝任一解碼套件:
+QR Code 檢查需要可執行 Python 的環境(例如 Claude Code),並安裝 zxing-cpp:
 
 ```bash
-pip install zxing-cpp pillow   # 建議
-# 或 pip install pyzbar pillow / pip install opencv-python
+pip install zxing-cpp pillow
 ```
 
-沒有可執行環境或套件時,其他稽核項目照常運作,QR Code 內容會標示為「未驗證」並提醒手動掃描,不會用猜的。
+zxing-cpp 是必要套件:設計稿上的 QR Code 常常偏小、置於風格化背景上,其他解碼器辨識率明顯較差,所以此 skill 不提供替代方案。缺少套件時 Claude 會先自動安裝再解碼;沒有可執行環境時,其他稽核項目照常運作,QR Code 內容會標示為「未驗證」並提醒手動掃描,不會用猜的。
 
 ## Files
 
