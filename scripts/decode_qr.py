@@ -8,21 +8,23 @@ visually — run this script.
 Usage:
     python3 decode_qr.py image1.png [image2.jpg ...]
 
-Output: one JSON object (see bottom of file) printed to stdout.
+Output: one JSON array (an object per image) printed to stdout.
 
-Decoding backends are tried in this order, using whichever is installed:
-    1. zxing-cpp   (pip install zxing-cpp pillow)   — most robust
-    2. pyzbar      (pip install pyzbar pillow; needs system libzbar)
-    3. OpenCV      (pip install opencv-python)      — QR codes only
+Requires zxing-cpp — the only decoder reliable enough for design images
+(small codes, styled backgrounds). Install it before running:
 
-If none is installed the script exits with code 2 and prints install
-instructions, so the caller can report "unverified" instead of guessing.
+    pip install zxing-cpp pillow
+
+If it is missing the script exits with code 2 and prints the install
+command, so the caller can install it and retry instead of guessing.
 """
 
 import json
 import sys
 
 MAX_UPSCALE_DIM = 4000  # don't upscale beyond this many pixels on a side
+
+INSTALL_CMD = "pip install zxing-cpp pillow"
 
 
 def _center_pct(points, width, height):
@@ -38,7 +40,7 @@ def _center_pct(points, width, height):
     }
 
 
-def _try_zxing(path, scale):
+def _decode(path, scale):
     import zxingcpp
     from PIL import Image
 
@@ -62,109 +64,27 @@ def _try_zxing(path, scale):
     return results
 
 
-def _try_pyzbar(path, scale):
-    from PIL import Image
-    from pyzbar.pyzbar import decode
-
-    img = Image.open(path).convert("RGB")
-    if scale != 1:
-        img = img.resize((img.width * scale, img.height * scale), Image.LANCZOS)
-    results = []
-    for r in decode(img):
-        rect = r.rect
-        pts = [
-            (rect.left, rect.top),
-            (rect.left + rect.width, rect.top + rect.height),
-        ]
-        results.append({
-            "data": r.data.decode("utf-8", errors="replace"),
-            "format": r.type,
-            "center": _center_pct(pts, img.width, img.height),
-        })
-    return results
-
-
-def _try_opencv(path, scale):
-    import cv2
-
-    img = cv2.imread(path)
-    if img is None:
-        raise IOError(f"cannot read image: {path}")
-    if scale != 1:
-        img = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_LANCZOS4)
-    h, w = img.shape[:2]
-    detector = cv2.QRCodeDetector()
-    ok, texts, points, _ = detector.detectAndDecodeMulti(img)
-    results = []
-    if ok:
-        for text, quad in zip(texts, points):
-            if not text:
-                continue
-            pts = [(float(p[0]), float(p[1])) for p in quad]
-            results.append({
-                "data": text,
-                "format": "QRCode",
-                "center": _center_pct(pts, w, h),
-            })
-    return results
-
-
-BACKENDS = [
-    ("zxing-cpp", _try_zxing),
-    ("pyzbar", _try_pyzbar),
-    ("opencv", _try_opencv),
-]
-
-
-def _image_max_dim(path):
+def decode_image(path):
+    """Try decoding at 1x, then upscaled — small QR codes on large canvases
+    often only decode after enlargement."""
     try:
         from PIL import Image
         with Image.open(path) as img:
-            return max(img.size)
-    except Exception:
-        try:
-            import cv2
-            img = cv2.imread(path)
-            if img is not None:
-                return max(img.shape[:2])
-        except Exception:
-            pass
-    return None
+            max_dim = max(img.size)
+    except Exception as e:
+        return {"qr_codes": [], "error": f"cannot read image: {e}"}
 
-
-def decode_image(path, backends):
-    """Try each available backend at 1x, then upscaled, until codes are found."""
-    max_dim = _image_max_dim(path)
-    scales = [1]
-    for s in (2, 4):
-        if max_dim is None or max_dim * s <= MAX_UPSCALE_DIM:
-            scales.append(s)
-
+    scales = [1] + [s for s in (2, 4) if max_dim * s <= MAX_UPSCALE_DIM]
     last_error = None
     for scale in scales:
-        for name, fn in backends:
-            try:
-                results = fn(path, scale)
-            except ImportError:
-                continue
-            except Exception as e:  # unreadable file, backend bug, etc.
-                last_error = f"{name}: {e}"
-                continue
-            if results:
-                return {"qr_codes": results, "backend": name, "error": None}
-    return {"qr_codes": [], "backend": None, "error": last_error}
-
-
-def available_backends():
-    usable = []
-    for name, fn in BACKENDS:
-        mod = {"zxing-cpp": "zxingcpp", "pyzbar": "pyzbar", "opencv": "cv2"}[name]
         try:
-            __import__(mod)
-            usable.append((name, fn))
-        except ImportError:
+            results = _decode(path, scale)
+        except Exception as e:
+            last_error = str(e)
             continue
-    return usable
+        if results:
+            return {"qr_codes": results, "error": None}
+    return {"qr_codes": [], "error": last_error}
 
 
 def main(argv):
@@ -172,18 +92,22 @@ def main(argv):
         print(__doc__.strip(), file=sys.stderr)
         return 1
 
-    backends = available_backends()
-    if not backends:
+    try:
+        import zxingcpp  # noqa: F401
+        import PIL  # noqa: F401
+    except ImportError as e:
         print(json.dumps({
-            "error": "no QR decoding backend installed",
-            "fix": "pip install zxing-cpp pillow  (or: pip install pyzbar pillow / opencv-python)",
-            "note": "Report QR contents as UNVERIFIED. Do not guess them from the image.",
+            "error": f"required decoding library not installed: {e.name}",
+            "fix": f"run `{INSTALL_CMD}` and retry",
+            "note": ("zxing-cpp is required — do not fall back to weaker decoders "
+                     "and do not guess QR contents from the image. If installation is "
+                     "impossible, report QR contents as UNVERIFIED."),
         }, ensure_ascii=False, indent=2))
         return 2
 
     out = []
     for path in argv[1:]:
-        result = decode_image(path, backends)
+        result = decode_image(path)
         result["image"] = path
         if not result["qr_codes"] and result["error"] is None:
             result["note"] = ("no QR code decoded; if one is visible in the image it may be "
