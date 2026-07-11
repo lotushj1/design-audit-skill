@@ -18,6 +18,18 @@
       "prompt": "檢查一張沒有文案錯誤的活動圖。左側有明顯白邊，主標被上緣裁切。",
       "expected_output": "把白邊與核心文字裁切列為高嚴重度以上的視覺問題，提供非數值修改方向，不額外虛構文案建議。",
       "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "檢查一張右下角有 QR Code 的週年慶活動圖，主標是「品牌 A 週年慶」。假設 scripts/decode_qr.py 解碼結果為 https://example.com/test-page。",
+      "expected_output": "先以 scripts/decode_qr.py 實際解碼而非視覺猜測；輸出 QR Code 檢查區塊並列出完整解碼連結；判定 example.com 測試連結與畫面活動明顯不相關，列為 Critical 並以「疑似放錯 QR Code」特別警告；預設不開啟該連結。",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "檢查一張右下角有 QR Code 的活動圖，但目前環境無法執行 Python 解碼。",
+      "expected_output": "不編造 QR Code 內容，QR Code 檢查區塊照常輸出並標示「未驗證」，提醒交付前手動掃描確認實際指向。",
+      "files": []
     }
   ]
 }
