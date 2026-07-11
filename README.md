@@ -11,6 +11,7 @@
 - 「幫我檢查這張圖能不能交付」
 - 「這組輪播圖交付前幫我稽核一下」
 - 「幫我看這張廣告圖有沒有錯字或廣告風險」
+- 「幫我確認這張圖的 QR Code 有沒有放錯」
 
 輸出範例(節錄):
 
@@ -46,6 +47,7 @@
 - CTA / 行動目標是否明確
 - 完成度細節
 - 文字正確性、台灣語境與廣告風險
+- QR Code 與連結對照(實際解碼 QR Code 內容,對照畫面訊息,放錯時發出警告)
 
 ## What It Doesn't Do
 
@@ -66,6 +68,7 @@
 - 不給主觀建議,例如「更高級」「更活潑」「更有質感」。
 - 不輸出優點區塊。
 - 多張圖會逐張檢查,並補整組輪播邏輯問題。
+- QR Code 一律用 `scripts/decode_qr.py` 實際解碼,不用視覺猜測;解碼後列出目前指向的連結供確認,與畫面內容明顯不相關時列為 Critical 並特別警告可能放錯。預設不開啟解碼出的連結。
 - 一律以繁體中文與台灣用語輸出。
 - 相似版本不能互相套用問題；輸出邊界白邊、異色條或透明殘留屬優先修正的交付瑕疵。
 
@@ -73,13 +76,24 @@
 
 需要支援視覺輸入(圖片)的 Claude 模型與環境,例如 Claude Code、Claude.ai 或 Claude API。
 
+QR Code 檢查需要可執行 Python 的環境(例如 Claude Code),並安裝任一解碼套件:
+
+```bash
+pip install zxing-cpp pillow   # 建議
+# 或 pip install pyzbar pillow / pip install opencv-python
+```
+
+沒有可執行環境或套件時,其他稽核項目照常運作,QR Code 內容會標示為「未驗證」並提醒手動掃描,不會用猜的。
+
 ## Files
 
 ```text
 design-audit-skill/
 ├── SKILL.md
-└── references/
-    └── taiwan-ad-risk.md
+├── references/
+│   └── taiwan-ad-risk.md
+└── scripts/
+    └── decode_qr.py
 ```
 
 ## Install
