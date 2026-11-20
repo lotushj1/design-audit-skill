@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Decode QR codes (and other barcodes) found in image files.
+"""Inspect raster images and optionally decode their QR codes.
 
 Used by the design-audit skill to verify that QR codes on a design
 actually point where the copy says they do. Never guess QR contents
 visually — run this script.
 
 Usage:
-    python3 decode_qr.py image1.png [image2.jpg ...]
+    python3 decode_qr.py [--inspect-only] image1.png [image2.jpg ...]
 
 Output: one JSON array (an object per image) printed to stdout.
 
@@ -66,21 +66,41 @@ def _decode(image, scale):
     return results
 
 
-def decode_image(path):
-    """Try decoding at 1x, then upscaled — small QR codes on large canvases
-    often only decode after enlargement."""
+def decode_image(path, *, inspect_only=False):
+    """Read file facts, then scan the display-oriented first frame if requested."""
     try:
-        from PIL import Image
+        from PIL import Image, ImageOps
         if Path(path).stat().st_size > MAX_FILE_BYTES:
             return {"status": "error", "qr_codes": [], "error": "file exceeds 32 MiB"}
         with Image.open(path) as img:
             if img.width * img.height > MAX_IMAGE_PIXELS:
                 return {"status": "error", "qr_codes": [], "error": "image exceeds 36 megapixels"}
-            max_dim = max(img.size)
+            orientation = img.getexif().get(274, 1)
+            width, height = img.size[::-1] if orientation in (5, 6, 7, 8) else img.size
+            frames = getattr(img, "n_frames", 1)
+            bands = img.getbands()
+            if "A" in bands:
+                alpha_min = img.getchannel("A").getextrema()[0]
+            elif "a" in bands or img.has_transparency_data:
+                alpha_min = img.convert("RGBA").getchannel("A").getextrema()[0]
+            else:
+                img.load()
+                alpha_min = 255
+            facts = {
+                "format": img.format,
+                "width": width,
+                "height": height,
+                "frames": frames,
+                "first_frame_has_transparency": alpha_min < 255,
+            }
+            if inspect_only:
+                return {"status": "inspected", "facts": facts, "qr_codes": [], "error": None}
+            ImageOps.exif_transpose(img, in_place=True)
             image = img.convert("RGB")
     except Exception as e:
         return {"status": "error", "qr_codes": [], "error": f"cannot read image: {e}"}
 
+    max_dim = max(image.size)
     scales = [1] + [s for s in (2, 4) if max_dim * s <= MAX_UPSCALE_DIM]
     errors = []
     matches = []
@@ -100,24 +120,26 @@ def decode_image(path):
             )
             if not same_code:
                 matches.append(result)
-    if matches:
-        return {"status": "decoded", "qr_codes": matches, "error": None}
     if len(errors) == len(scales):
-        return {"status": "error", "qr_codes": [], "error": errors[-1]}
-    return {"status": "no_code", "qr_codes": [], "error": None}
+        return {"status": "error", "facts": facts, "qr_codes": [], "error": errors[-1]}
+    return {"status": "decoded" if matches else "no_code", "facts": facts, "qr_codes": matches, "error": None}
 
 
 def main(argv):
-    if len(argv) < 2:
+    args = argv[1:]
+    inspect_only = args[:1] == ["--inspect-only"]
+    files = args[1:] if inspect_only else args
+    if not files:
         print(__doc__.strip(), file=sys.stderr)
         return 1
-    if len(argv) - 1 > MAX_BATCH:
+    if len(files) > MAX_BATCH:
         print(json.dumps({"error": f"process no more than {MAX_BATCH} files per batch"}))
         return 2
 
     try:
-        import zxingcpp  # noqa: F401
         import PIL  # noqa: F401
+        if not inspect_only:
+            import zxingcpp  # noqa: F401
     except ImportError as e:
         print(json.dumps({
             "error": f"required decoding library not installed: {e.name}",
@@ -129,10 +151,10 @@ def main(argv):
         return 2
 
     out = []
-    for path in argv[1:]:
-        result = decode_image(path)
+    for path in files:
+        result = decode_image(path, inspect_only=inspect_only)
         result["image"] = path
-        if not result["qr_codes"] and result["error"] is None:
+        if result["status"] == "no_code":
             result["note"] = ("no QR code decoded; if one is visible in the image it may be "
                               "too small, low-contrast, or distorted — flag it as unscannable/unverified")
         out.append(result)
