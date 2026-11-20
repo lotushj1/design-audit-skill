@@ -69,33 +69,35 @@ def _decode(image, scale):
 def decode_image(path, *, inspect_only=False):
     """Read file facts, then scan the display-oriented first frame if requested."""
     try:
-        from PIL import Image, ImageOps
+        from PIL import Image, ImageChops, ImageOps
         if Path(path).stat().st_size > MAX_FILE_BYTES:
             return {"status": "error", "qr_codes": [], "error": "file exceeds 32 MiB"}
         with Image.open(path) as img:
             if img.width * img.height > MAX_IMAGE_PIXELS:
                 return {"status": "error", "qr_codes": [], "error": "image exceeds 36 megapixels"}
-            orientation = img.getexif().get(274, 1)
-            width, height = img.size[::-1] if orientation in (5, 6, 7, 8) else img.size
+            file_format = img.format
             frames = getattr(img, "n_frames", 1)
+            ImageOps.exif_transpose(img, in_place=True)
             bands = img.getbands()
             if "A" in bands:
-                alpha_min = img.getchannel("A").getextrema()[0]
+                alpha = img.getchannel("A")
             elif "a" in bands or img.has_transparency_data:
-                alpha_min = img.convert("RGBA").getchannel("A").getextrema()[0]
+                alpha = img.convert("RGBA").getchannel("A")
             else:
-                img.load()
-                alpha_min = 255
+                alpha = None
+            transparent_bounds = None
+            if alpha is not None and alpha.getextrema()[0] < 255:
+                transparent_bounds = ImageChops.invert(alpha).getbbox()
             facts = {
-                "format": img.format,
-                "width": width,
-                "height": height,
+                "format": file_format,
+                "width": img.width,
+                "height": img.height,
                 "frames": frames,
-                "first_frame_has_transparency": alpha_min < 255,
+                "first_frame_has_transparency": transparent_bounds is not None,
+                "first_frame_transparency_bounds": transparent_bounds,
             }
             if inspect_only:
                 return {"status": "inspected", "facts": facts, "qr_codes": [], "error": None}
-            ImageOps.exif_transpose(img, in_place=True)
             image = img.convert("RGB")
     except Exception as e:
         return {"status": "error", "qr_codes": [], "error": f"cannot read image: {e}"}

@@ -18,10 +18,12 @@ class TestDecoder(unittest.TestCase):
         self.assertEqual(first["facts"], {
             "format": "PNG", "width": 1080, "height": 1280,
             "frames": 1, "first_frame_has_transparency": True,
+            "first_frame_transparency_bounds": (0, 905, 18, 1280),
         })
         self.assertEqual(revised["facts"], {
             "format": "PNG", "width": 1080, "height": 1350,
             "frames": 1, "first_frame_has_transparency": False,
+            "first_frame_transparency_bounds": None,
         })
         self.assertEqual([code["data"] for code in first["qr_codes"]], ["https://www.w3.org/TR/SVG2/"])
         self.assertEqual([code["data"] for code in revised["qr_codes"]], ["https://w3.org/TR/WCAG22/"])
