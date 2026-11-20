@@ -128,6 +128,20 @@
         "v2 以本身證據判定，舊稿錯誤不影響修正版",
         "先交代必修差異，附臺灣用語改寫及可讀性方向"
       ]
+    },
+    {
+      "id": 14,
+      "prompt": "逐張檢查活動亮點頁、乾淨活動圖及有裁切的活動圖，說明哪張可以交件。活動亮點頁的核定用途為介紹活動亮點，沒有指定條列數。",
+      "files": [
+        "evals/fixtures/short-highlight.png",
+        "evals/fixtures/clean-poster.png",
+        "evals/fixtures/cropped-low-contrast.png"
+      ],
+      "assertions": [
+        "已提供在地品牌與手作攤位，內容簡短不判為缺少亮點",
+        "乾淨稿放行，留白與裝飾位置不列問題或殘餘建議",
+        "仍指出原圖上實際發生的裁切和難讀文字"
+      ]
     }
   ]
 }
