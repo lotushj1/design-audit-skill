@@ -53,7 +53,7 @@ AI 會先列出找到幾張、一張一張檢查（標準不打折），最後�
 ~/.claude/skills/design-audit/
 ```
 
-QR Code 檢查建議使用已驗證的 Python 3.12。在獨立環境執行 `python -m pip install -r requirements.txt`，再執行 `python scripts/decode_qr.py 圖檔.png`。輸出會標出每個檔案的解碼狀態與錯誤，多檔中部分失敗仍會保留其餘結果。
+QR Code 檢查從 Skill 目錄執行 `uv run --python 3.12 --with-requirements requirements.txt python scripts/decode_qr.py /絕對路徑/圖檔.png`。無 uv 時可使用 Python 3.12 虛擬環境，先 `python -m pip install -r requirements.txt`，再用同一環境執行解碼。輸出會標出每個檔案的解碼狀態與錯誤，多檔中部分失敗仍會保留其餘結果。
 
 [評估案例](evals/evals.json)包含實際圖片、乾淨對照和多碼情境。這些是虛構測試資料，可在同一個模型版本建立基準。
 
