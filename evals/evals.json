@@ -36,6 +36,43 @@
       "prompt": "檢查一張活動圖，QR Code 解碼結果為短網址，開啟後回應 404。",
       "expected_output": "實際讀取連結並記下最終落點；判定為連結失效，列為 Critical，標示「疑似連結失效或尚未上線，請確認」，並列入完整問題清單。",
       "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "獨立檢查這張海報，保留風險位置與其影響。",
+      "files": [
+        "evals/fixtures/cropped-low-contrast.png"
+      ],
+      "expected_output": "抓到主標上半截遭白帶遮擋、低對比文字和中國用語。",
+      "assertions": [
+        "可定位遮擋",
+        "能辨認並改寫視頻教程",
+        "不新增活動資訊"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "請檢查這張海報的交付狀態。",
+      "files": [
+        "evals/fixtures/clean-poster.png"
+      ],
+      "expected_output": "保留已可讀的已知資訊，可交付或只列經確認問題。",
+      "assertions": [
+        "不虛構錯字、壓字或 QR"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "解碼並核對海報上的兩個 QR。",
+      "files": [
+        "evals/fixtures/two-qr-codes.png"
+      ],
+      "expected_output": "獨立讀取兩碼並標明位置，保留測試網域的未驗證狀態。",
+      "assertions": [
+        "左碼為 /registration",
+        "右碼為 /location",
+        "目的網站未驗證"
+      ]
     }
   ]
 }

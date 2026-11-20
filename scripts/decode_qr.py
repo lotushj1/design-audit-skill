@@ -10,21 +10,22 @@ Usage:
 
 Output: one JSON array (an object per image) printed to stdout.
 
-Requires zxing-cpp — the only decoder reliable enough for design images
-(small codes, styled backgrounds). Install it before running:
-
-    pip install zxing-cpp pillow
+Run from the skill directory after installing requirements.txt.
 
 If it is missing the script exits with code 2 and prints the install
 command, so the caller can install it and retry instead of guessing.
 """
 
 import json
+from pathlib import Path
 import sys
 
 MAX_UPSCALE_DIM = 4000  # don't upscale beyond this many pixels on a side
+MAX_IMAGE_PIXELS = 36_000_000
+MAX_FILE_BYTES = 32 * 1024 * 1024
+MAX_BATCH = 40
 
-INSTALL_CMD = "pip install zxing-cpp pillow"
+INSTALL_CMD = "python -m pip install -r requirements.txt"
 
 
 def _center_pct(points, width, height):
@@ -40,15 +41,16 @@ def _center_pct(points, width, height):
     }
 
 
-def _decode(path, scale):
+def _decode(image, scale):
     import zxingcpp
     from PIL import Image
 
-    img = Image.open(path).convert("RGB")
+    img = image
     if scale != 1:
         img = img.resize((img.width * scale, img.height * scale), Image.LANCZOS)
     results = []
-    for r in zxingcpp.read_barcodes(img):
+    formats = (zxingcpp.QRCode, zxingcpp.MicroQRCode, zxingcpp.RMQRCode)
+    for r in zxingcpp.read_barcodes(img, formats=formats):
         pos = r.position
         pts = [
             (pos.top_left.x, pos.top_left.y),
@@ -69,28 +71,49 @@ def decode_image(path):
     often only decode after enlargement."""
     try:
         from PIL import Image
+        if Path(path).stat().st_size > MAX_FILE_BYTES:
+            return {"status": "error", "qr_codes": [], "error": "file exceeds 32 MiB"}
         with Image.open(path) as img:
+            if img.width * img.height > MAX_IMAGE_PIXELS:
+                return {"status": "error", "qr_codes": [], "error": "image exceeds 36 megapixels"}
             max_dim = max(img.size)
+            image = img.convert("RGB")
     except Exception as e:
-        return {"qr_codes": [], "error": f"cannot read image: {e}"}
+        return {"status": "error", "qr_codes": [], "error": f"cannot read image: {e}"}
 
     scales = [1] + [s for s in (2, 4) if max_dim * s <= MAX_UPSCALE_DIM]
-    last_error = None
+    errors = []
+    matches = []
     for scale in scales:
         try:
-            results = _decode(path, scale)
+            results = _decode(image, scale)
         except Exception as e:
-            last_error = str(e)
+            errors.append(str(e))
             continue
-        if results:
-            return {"qr_codes": results, "error": None}
-    return {"qr_codes": [], "error": last_error}
+        for result in results:
+            center = result["center"]
+            same_code = any(
+                item["data"] == result["data"] and item["format"] == result["format"]
+                and abs(item["center"]["x_pct"] - center["x_pct"]) <= 1
+                and abs(item["center"]["y_pct"] - center["y_pct"]) <= 1
+                for item in matches
+            )
+            if not same_code:
+                matches.append(result)
+    if matches:
+        return {"status": "decoded", "qr_codes": matches, "error": None}
+    if len(errors) == len(scales):
+        return {"status": "error", "qr_codes": [], "error": errors[-1]}
+    return {"status": "no_code", "qr_codes": [], "error": None}
 
 
 def main(argv):
     if len(argv) < 2:
         print(__doc__.strip(), file=sys.stderr)
         return 1
+    if len(argv) - 1 > MAX_BATCH:
+        print(json.dumps({"error": f"process no more than {MAX_BATCH} files per batch"}))
+        return 2
 
     try:
         import zxingcpp  # noqa: F401

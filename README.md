@@ -40,20 +40,22 @@ AI 會先列出找到幾張、一張一張檢查（標準不打折），最後�
 
 每張圖會有：
 
-1. **可交付性判斷**：可交付、建議修改後交付、不建議交付，三選一
+1. **可交付性判斷**：可交付、建議修改後交付、不建議交付或驗證中
 2. **問題清單**：照嚴重程度排好，每條寫清楚位置、問題、為什麼、怎麼改
 3. **文字風險提醒**：有錯字或廣告風險時，直接附上改好的參考文案
 4. **QR Code 檢查結果**：解碼出的連結和實際內容對照
 
 ## 安裝
 
-把 `SKILL.md` 和 `references/`、`scripts/` 資料夾放進：
+把 `SKILL.md`、`requirements.txt` 和 `references/`、`scripts/` 資料夾放進：
 
 ```
 ~/.claude/skills/design-audit/
 ```
 
-QR Code 檢查需要 Python 環境（會用到 `scripts/decode_qr.py`）。
+QR Code 檢查建議使用已驗證的 Python 3.12。在獨立環境執行 `python -m pip install -r requirements.txt`，再執行 `python scripts/decode_qr.py 圖檔.png`。輸出會標出每個檔案的解碼狀態與錯誤，多檔中部分失敗仍會保留其餘結果。
+
+[評估案例](evals/evals.json)包含實際圖片、乾淨對照和多碼情境。這些是虛構測試資料，可在同一個模型版本建立基準。
 
 ## 提醒
 
